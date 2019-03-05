@@ -1,0 +1,12 @@
+Resources:
+
+https://classroom.udacity.com/nanodegrees/nd002-airbus/parts/35305c70-58f5-4614-b7d6-302fa3f916a3
+https://www.openstreetmap.org
+https://wiki.openstreetmap.org/wiki/Key:CEMT
+https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+https://www.tutorialspoint.com/sqlite/sqlite_commands.htm
+http://www.redlionlowerwithington.co.uk
+https://www.redlionlittlebudworth.com
+https://www.royalmail.com/find-a-postcode
+https://postcodes.io
+https://github.com/previousdeveloper/PythonPostcodesWrapper

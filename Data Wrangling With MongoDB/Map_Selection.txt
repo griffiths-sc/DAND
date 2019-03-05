@@ -1,0 +1,7 @@
+Map Selection:
+
+The area to be analysed is the Borough of Cheshire West and Chester. This is my local area, where I live and work.
+
+https://www.openstreetmap.org/relation/153488
+
+https://overpass-api.de/api/map?bbox=-3.1284,52.9759,-2.3346,53.3530
