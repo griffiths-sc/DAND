@@ -1,0 +1,8 @@
+Files:
+
+POI_Identifier.pdf
+poi_id.py
+tester.py
+my_dataset.pkl
+my_classifier.pkl
+my_feature_list.pkl
