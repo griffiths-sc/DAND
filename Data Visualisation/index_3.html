@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<style>
+			.title {
+				font-family: Helvetica, Arial, sans-serif;
+				font-size: 24px;
+				text-anchor: middle;
+			}
+			.subtitle {
+				font-family: Helvetica, Arial, sans-serif;
+				font-size: 18px;
+				text-anchor: middle;
+			}
+			.axis text {
+				font-family: Helvetica, Arial, sans-serif;
+				font-size: 12px;
+				text-anchor: end;
+			}
+			.axis_label {
+				font-family: Helvetica, Arial, sans-serif;
+				font-size: 16px;
+				text-anchor: middle;
+			}
+			.axis path {
+				fill:none;
+				stroke:black;
+				stroke-width: 1.0px;
+				shape-rendering: crispEdges;
+			}
+			.axis line {
+				fill:none;
+				stroke:black;
+				stroke-width: 0.5px;
+				shape-rendering: crispEdges;
+			}
+			.teambars {
+				fill: gold;
+			}
+			.focus_teambars {
+				fill: red;
+			}
+			.playerbars {
+				fill: gold;
+			}
+			.focus_playerbars {
+				fill: red;
+			}
+			.team-name text {
+				font-family: Helvetica, Arial, sans-serif;
+				font-size:20px;
+				text-anchor: middle;
+			}
+			.team-value text {
+				font-family: Helvetica, Arial, sans-serif;
+				font-size:16px;
+				text-anchor: middle;
+			}
+			.circle {
+				fill: gold;
+				stroke: black;
+				stroke-width: 0.5;
+				opacity: 0.7;
+			}
+			.focus_circle {
+				fill: red;
+				stroke: red;
+				stroke-width: 1.0;
+			}
+			.country {
+				fill: ForestGreen;
+				stroke: black;
+				stroke-width: 0.5;
+				opacity: 0.8;
+			}
+			.sea {
+				fill: skyBlue;
+				opacity: 0.8;
+			}
+		</style>
+		<script src="http://d3js.org/d3.v3.min.js"></script>
+		<script type="text/javascript">
+			function draw(data) {
+
+				"use strict";
+
+				var margin = {top: 50, right: 50, bottom: 50, left: 50},
+					padding = {top: 10, right: 10, bottom: 20, left: 10},
+					title_height = 60,
+					map_height = 350,
+					summary_height = 60,
+					chart_height = 300,
+					width = 1100,
+					inner_width = width - margin.left - margin.right,
+					height = title_height + map_height + summary_height + chart_height + margin.top + margin.bottom;
+
+				var xScale = d3.scale.ordinal().rangeRoundBands([6 * padding.left, inner_width - padding.left - padding.right], .15),
+					yScale = d3.scale.linear().range([chart_height - padding.top - padding.bottom, padding.top]),
+					yAxis = d3.svg.axis().orient("left").ticks(10).tickFormat(function(d) { return (d / 1000000).toFixed(2) + "M"; });
+
+				var transition_duration = 500,
+					selected = null;
+
+				var svgContainer = d3.select("body").append("svg")
+					.attr("x", margin.left)
+					.attr("y", margin.top)
+					.attr("width", inner_width)
+					.attr("height", height)
+					.attr("class", "container");
+
+				var title_window = svgContainer.append("svg")
+					.attr("x", 0)
+					.attr("y", 0)
+					.attr("width", inner_width)
+					.attr("height", title_height)
+					.attr("class", "title_window");
+
+				// Title
+				title_window.append("text")
+					.attr("x", inner_width / 2)             
+					.attr("y", title_height / 3)
+					.attr("class", "title")
+					.text("Where is all the money in football?");
+
+				// Subtitle
+				title_window.append("text")
+					.attr("x", inner_width / 2)             
+					.attr("y", 2.5 * title_height / 3)
+					.attr("class", "subtitle")
+					.text("Football teams whose total squad value is greater than 100M Euro:");
+
+				// Map background
+				svgContainer.append("svg")
+					.append("rect")
+					.attr("x", padding.left)
+					.attr("y", title_height + padding.top)
+					.attr("width", inner_width - padding.left - padding.right)
+					.attr("height", map_height - padding.top - padding.bottom)
+					.attr("class", "sea");
+				  
+				var map_window = svgContainer.append("svg")
+					.attr("x", padding.left)
+					.attr("y", title_height + padding.top)
+					.attr("width", inner_width - padding.left - padding.right)
+					.attr("height", map_height - padding.top - padding.bottom)
+					.attr("class", "map");
+
+				// Draw the map 
+				function draw_map(geo_data) {
+
+					var proj = d3.geo.mercator().scale(135).translate([0.5 * inner_width, 0.64 * map_height]);
+
+					var path = d3.geo.path().projection(proj);
+
+					// Add countries
+					var map = map_window.selectAll("path")
+						.data(geo_data.features)
+						.enter()
+						.append("path")
+						.attr("d", path)
+						.attr("class", "country")
+						.attr("vector-effect", "non-scaling-stroke");
+
+					// Draw location markers on map
+					function draw_circles(data) {
+
+						function squadvalue(squad) {
+
+							var total = d3.sum(squad, function(d) { return d.Value; });
+
+							var coords = squad.map(function(d) { return proj([d.Longitude, d.Latitude]); });
+
+							var x = d3.max(coords, function(d) { return d[0]; });
+
+							var y = d3.max(coords, function(d) { return d[1]; });
+
+							return { "total": total, "x": x, "y": y };
+
+						} // squadvalue
+
+						var teams = d3.nest().key(function(d) { return d.Club; })
+							.rollup(squadvalue)
+							.entries(data);
+
+						var players = d3.nest().key(function(d) { return d.Club; })
+							.entries(data);
+
+						var value_max = d3.max(teams, function(d) { return d.values.total; });
+
+						var radius = d3.scale.sqrt()
+							.domain([0, value_max])
+							.range([0, 8]);
+
+						function key_func(d) { return d.key; }
+
+						// Add location markers
+						map_window.append("g")
+							.selectAll("circle")
+							.data(teams.sort(function(a, b) { return b.values.total - a.values.total; }), key_func)
+							.enter()
+							.append("circle")
+							.attr("team", function(d) { return key_func(d); })
+							.attr("vector-effect", "non-scaling-stroke")
+							.attr("cx", function(d) { return d.values["x"]; })
+							.attr("cy", function(d) { return d.values["y"]; })
+							.attr("r", 0)
+							.attr("class", "circle")
+							.transition()
+							.delay(function(d, i) { return (i / teams.length) * 2 * transition_duration; })
+							.duration(transition_duration)
+							.attr("r", function(d) { return radius(d.values.total); });
+
+						map_window.selectAll(".circle")
+							.on("mouseover", function(d) { team_mouseover(d.key, d.values.total); })
+							.on("mouseout", function(d) { team_mouseout(d.key); })
+							.on("click", function(d) { team_click(d.key, d.values.total); });
+
+					} // draw_circles
+
+					draw_circles(data);
+
+				} // draw_map
+				
+				// Read in map data
+				d3.json("world_countries.json", draw_map);
+
+				var summary_window = svgContainer.append("svg")
+					.attr("x", padding.left)
+					.attr("y", title_height + map_height)
+					.attr("width", inner_width - padding.left - padding.right)
+					.attr("height", summary_height)
+					.attr("class", "summary_window");
+
+				// Calculate combined value of all teams
+				var total_100 = d3.sum(data, function(d){ return d.Value; })
+
+				var summary = summary_window.append("text")
+					.attr("x", inner_width / 2)             
+					.attr("y", summary_height / 2)
+					.attr("class", "subtitle")
+					.text("Total collective squad value of all displayed teams: " + (total_100 / 1000000000).toFixed(2) + "B Euro");
+
+				var chart_window = svgContainer.append("svg")
+					.attr("x", padding.left)
+					.attr("y", title_height + map_height + summary_height + padding.top)
+					.attr("width", inner_width - padding.left - padding.right)
+					.attr("height", chart_height - padding.top)
+					.attr("class", "chart");
+
+				// Create placeholder for team/player name
+				var team_name = chart_window.append("g")
+					.attr("class", "team-name")
+					.attr("transform", "translate(" + ((0.5 * inner_width) + margin.left) + "," + (0.2 * chart_height) + ")")
+					.append("text")
+					.style("visibility", "hidden")
+					.text("");
+
+				// Create placeholder for team/player value
+				var team_value = chart_window.append("g")
+					.attr("class", "team-value")
+					.attr("transform", "translate(" + ((0.5 * inner_width) + margin.left) + "," + (0.3 * chart_height) + ")")
+					.append("text")
+					.style("visibility", "hidden")
+					.text("");
+
+				var axis_label = chart_window.append("g")
+					.attr("class", "axis_label")
+					.attr("transform", "translate(" + ((0.5 * inner_width)) + "," + (chart_height - (0.5 * padding.bottom)) + ")")
+					.append("text")
+					.text("TEAMS");
+
+				// Draw the initial teams bar chart
+				function draw_chart(data) {
+
+					function squadtotal(squad) {
+
+						var total = d3.sum(squad, function(d) { return d.Value; });
+
+						return { "total" : total };
+
+					}
+
+					var teams = d3.nest().key(function(d) { return d.Club; })
+						.rollup(squadtotal)
+						.entries(data);
+
+					var value_max = d3.max(teams, function(d) { return d.values.total; });
+
+					function key_func(d) { return d.key; }
+
+					xScale.domain(teams.map(function(d) { return key_func(d); }));
+
+					yScale.domain([0, value_max]);
+
+					yAxis.scale(yScale);
+
+					// Add teams bars
+					chart_window.selectAll(".teambars")
+						.data(teams)
+						.enter()
+						.append("rect")
+						.attr("class", "teambars")
+						.attr("team", function(d) { return key_func(d); })
+						.attr("x", function(d) { return xScale(key_func(d)); })
+						.attr("width", function(d){ return xScale.rangeBand(); })
+						.attr("y", chart_height - padding.top - padding.bottom)
+						.attr("height", 0)
+						.transition()
+						.delay(function(d, i) { return (i / teams.length) * 2 * transition_duration; })
+						.duration(transition_duration)
+						.attr("y", function(d) { return yScale(d.values.total); })
+						.attr("height", function(d) { return chart_height - padding.top - padding.bottom - yScale(d.values.total); });
+					
+					chart_window.selectAll(".teambars")
+						.on("mouseover", function(d) { team_mouseover(d.key, d.values.total); })
+						.on("mouseout", function(d) { team_mouseout(d.key); })
+						.on("click", function(d) { team_click(d.key, d.values.total); });
+
+					var y_axis = chart_window.append("g")
+						.attr("class", "y axis")
+						.attr("transform", "translate(" + (margin.left + padding.left)  + "," + 0 + ")")
+						.call(yAxis);
+
+				}; // draw_chart
+
+				function team_mouseover(team,value) {
+
+					if (!selected) {
+
+						d3.select("circle[team='" + team + "']").attr("class", "focus_circle");
+
+						d3.select("rect[team='" + team + "']").attr("class", "focus_teambars");
+
+						team_name.text(team).style("visibility", "visible");
+
+						team_value.text((value / 1000000).toFixed(2) + "M Euro").style("visibility", "visible");
+
+					};
+
+				}
+
+				function team_mouseout(team) {
+
+					if (!selected) {
+
+						d3.select("circle[team='" + team + "']").attr("class", "circle");
+
+						d3.select("rect[team='" + team + "']").attr("class", "teambars");
+
+						team_name.text("").style("visibility", "hidden");
+
+						team_value.text("").style("visibility", "hidden");
+
+					};
+
+				}
+
+				function team_click(team,value) {
+
+					if (!selected) {
+
+						// Select team
+
+						summary.text(team + " (Total Squad Value = " + (value / 1000000).toFixed(2) + "M Euro)");
+
+						axis_label.text("PLAYERS");
+
+						var mx = d3.select("circle[team='" + team + "']").attr("cx");
+
+						var my = d3.select("circle[team='" + team + "']").attr("cy");
+
+						// Zoom in
+						d3.selectAll(".country, circle")
+							.transition()
+							.duration(2 * transition_duration)
+							.attr("transform",
+								  "translate(" + (inner_width / 2) + "," + (map_height / 2) + ") scale(4) translate(" + (-mx) + "," + (-my) + ")");
+
+						selected = team;
+
+						update_chart(selected);
+
+					} else {
+
+						// Unselect team
+
+						summary.text("Total collective squad value of all displayed teams: " + (total_100 / 1000000000).toFixed(2) + "B Euro");
+
+						axis_label.text("TEAMS")
+
+						var mx = inner_width / 2;
+
+						var my = map_height / 2;
+
+						// Zoom out
+						d3.selectAll(".country, circle")
+							.transition()
+							.duration(2 * transition_duration)
+							.attr("transform",
+								  "translate(" + (mx) + "," + (my) + ") scale(1) translate(" + (-mx) + "," + (-my) + ")");
+
+						var selection = selected;
+
+						selected = null;
+
+						team_mouseout(selection);
+
+						update_chart(selected);
+
+					};
+
+				}            
+				
+				function player_mouseover(player,category, value) {
+
+					d3.select("rect[player='" + player + "']").attr("class", "focus_playerbars");
+
+					team_name.text(player + " (" + category + ")").style("visibility", "visible");
+
+					team_value.text((value / 1000000).toFixed(2) + "M Euro").style("visibility", "visible");
+
+				}
+				
+				function player_mouseout(player) {
+
+					d3.select("rect[player='" + player + "']").attr("class", "playerbars");
+
+					team_name.text("").style("visibility", "hidden");
+
+					team_value.text("").style("visibility", "hidden");
+
+				} 
+				
+				function player_click() {
+
+					team_click();
+
+				}
+
+				// Update bar chart based on user selection
+				function update_chart(selected_team) {
+
+					function squadtotal(squad) {
+
+						var total = d3.sum(squad, function(d) { return d.Value; });
+
+						return { "total" : total };
+
+					}
+
+					function key_func(d) { return d.key; }
+					
+					if (!selected_team) { // No team selected, display team bars
+
+						var teams = d3.nest().key(function(d) { return d.Club; })
+										.rollup(squadtotal)
+										.entries(data);
+
+						var value_max = d3.max(teams, function(d) { return d.values.total; });
+
+						xScale.domain(teams.map(function(d) { return key_func(d); }));
+
+						yScale.domain([0, value_max]);
+
+						yAxis.scale(yScale);
+
+						// Transition existing playerbars to zero and remove
+						var bars = chart_window.selectAll(".playerbars, .focus_playerbars")
+							.transition()
+							.delay(transition_duration)
+							.duration(transition_duration)
+							.attr("y", chart_height - padding.top - padding.bottom)
+							.attr("height", 0);
+
+						bars.remove();
+
+						// Add new team bars
+						chart_window.selectAll(".teambars")
+							.data(teams)
+							.enter()
+							.append("rect")
+							.attr("class", "teambars")
+							.attr("team", function(d) { return key_func(d); })
+							.attr("x", function(d) { return xScale(key_func(d)); })
+							.attr("width", function(d){ return xScale.rangeBand(); })
+							.attr("y", chart_height - padding.top - padding.bottom)
+							.attr("height", 0)
+							.transition()
+							.delay(transition_duration)
+							.duration(transition_duration)
+							.attr("y", function(d) { return yScale(d.values.total); })
+							.attr("height", function(d) { return chart_height - padding.top - padding.bottom - yScale(d.values.total); });
+
+						d3.select(".y")
+							.transition()
+							.delay(transition_duration)
+							.duration(transition_duration)
+							.call(yAxis);
+
+						chart_window.selectAll(".teambars")
+							.on("mouseover", function(d) { team_mouseover(d.key, d.values.total); })
+							.on("mouseout", function(d) { team_mouseout(d.key); })
+							.on("click", function(d) { team_click(d.key, d.values.total); });
+
+					} else { // Team selected, display player bars
+
+						var players = d3.nest().key(function(d) { return d.Club; })
+							.entries(data);
+
+						var team = players.filter(function(d) { return d.key === selected_team; })[0].values;
+
+						var value_max = d3.max(team.map(function(d) { return d.Value; } ));
+
+						xScale.domain(team.map(function(d) { return d.Name; }));
+
+						yScale.domain([0, value_max]);
+
+						yAxis.scale(yScale);
+
+						// Transition existing teambars to zero and remove
+						var bars = chart_window.selectAll(".teambars, .focus_teambars")
+							.transition()
+							.delay(transition_duration)
+							.duration(transition_duration)
+							.attr("y", chart_height - padding.top - padding.bottom)
+							.attr("height", 0);
+
+						bars.remove();
+
+						// Add new player bars
+						chart_window.selectAll(".playerbars")
+							.data(team)
+							.enter()
+							.append("rect")
+							.attr("class", "playerbars")
+							.attr("player", function(d) { return d.Name; })
+							.attr("x", function(d) { return xScale(d.Name); })
+							.attr("width", function(d){ return xScale.rangeBand(); })
+							.attr("y", chart_height - padding.top - padding.bottom)
+							.attr("height", 0)
+							.transition()
+							.delay(transition_duration)
+							.duration(transition_duration)
+							.attr("y", function(d) { return yScale(d.Value); })
+							.attr("height", function(d) { return chart_height - padding.top - padding.bottom - yScale(d.Value); });
+
+						team_name.text("").style("visibility", "hidden");
+
+						team_value.text("").style("visibility", "hidden");                    
+						
+						d3.select(".y")
+							.transition()
+							.delay(transition_duration)
+							.duration(transition_duration)
+							.call(yAxis);
+
+						chart_window.selectAll(".playerbars")
+							.on("mouseover", function(d) { player_mouseover(d.Name, d.Category, d.Value); })
+							.on("mouseout", function(d) { player_mouseout(d.Name); })
+							.on("click", function() { player_click(); });
+
+					};
+
+				} // update_chart
+
+				draw_chart(data);
+
+			}; // draw
+
+		</script>
+	</head>
+	<body>
+		<script type="text/javascript">
+		// Read in football dataset and coerce strings to numbers
+		d3.csv("fifa100m_v2.csv", function(d) {
+
+			d["Latitude"] = +d["Latitude"];
+
+			d["Longitude"] = +d["Longitude"];
+
+			d["Value"] = +d["Value"];
+
+			return d;
+
+		}, draw);
+		</script>
+	</body>
+</html>
